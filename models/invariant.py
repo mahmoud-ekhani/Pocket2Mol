@@ -61,23 +61,23 @@ class GVLinear(Module):
     def __init__(self, in_scalar, in_vector, out_scalar, out_vector):
         super().__init__()
         dim_hid = max(in_vector, out_vector)
-        self.lin_vector = VNLinear(in_vector, dim_hid, bias=False)
-        self.lin_vector2 = VNLinear(dim_hid, out_vector, bias=False)
+        self.lin_vector = VNLinear(in_vector, dim_hid, bias=False) # W_h
+        self.lin_vector2 = VNLinear(dim_hid, out_vector, bias=False) # W_mu
         # self.group_lin_vector = VNGroupLinear(dim_hid, out_vector, bias=False)
         # self.group_lin_scalar = Conv1d(in_scalar + dim_hid, out_scalar, 1, bias=False)
-        self.scalar_to_vector_gates = Linear(out_scalar, out_vector)
-        self.lin_scalar = Linear(in_scalar + dim_hid, out_scalar, bias=False)
+        self.scalar_to_vector_gates = Linear(out_scalar, out_vector) # W_g
+        self.lin_scalar = Linear(in_scalar + dim_hid, out_scalar, bias=False) # W_m
 
     def forward(self, features):
         feat_scalar, feat_vector = features
-        feat_vector_inter = self.lin_vector(feat_vector)  # (N_samples, dim_hid, 3)
-        feat_vector_norm = torch.norm(feat_vector_inter, p=2, dim=-1)  # (N_samples, dim_hid)
-        feat_scalar_cat = torch.cat([feat_vector_norm, feat_scalar], dim=-1)  # (N_samples, dim_hid+in_scalar)
+        feat_vector_inter = self.lin_vector(feat_vector)  # (N_samples, dim_hid, 3) W_h.V
+        feat_vector_norm = torch.norm(feat_vector_inter, p=2, dim=-1)  # (N_samples, dim_hid) ||W_h.V||_2
+        feat_scalar_cat = torch.cat([feat_vector_norm, feat_scalar], dim=-1)  # (N_samples, dim_hid+in_scalar) # S_m = concat(S, ||W_h.V||_2)
 
-        out_scalar = self.lin_scalar(feat_scalar_cat)
-        out_vector = self.lin_vector2(feat_vector_inter)
+        out_scalar = self.lin_scalar(feat_scalar_cat) # W_m.S_m
+        out_vector = self.lin_vector2(feat_vector_inter) #W_mu.V
 
-        gating = torch.sigmoid(self.scalar_to_vector_gates(out_scalar)).unsqueeze(dim = -1)
+        gating = torch.sigmoid(self.scalar_to_vector_gates(out_scalar)).unsqueeze(dim = -1) # sigma_g(W_g.W_m.S_m+b_g)
         out_vector = gating * out_vector
         return out_scalar, out_vector
 
